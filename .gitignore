@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build outputs
+bin/
+obj/
+*/bin/
+*/obj/
+
+# Logs and temp
+*.log
+*.tmp
+*.temp
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Coverage and caches
+coverage/
+.dist/
+.cache/

@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Direct Messages</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #030510;
+      --panel: rgba(10, 14, 28, 0.8);
+      --panel-2: rgba(14, 20, 42, 0.9);
+      --muted: #aeb6ce;
+      --text: #f4f6ff;
+      --line: #1a2036;
+      --accent: #7c5bff;
+      --accent-2: #2df4c6;
+      --shadow: 0 14px 36px rgba(0,0,0,0.28);
+      --glass: rgba(255,255,255,0.03);
+      font-family: 'Manrope', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at 25% 20%, rgba(91,144,255,0.08), transparent 32%), radial-gradient(circle at 80% 0%, rgba(45,244,198,0.07), transparent 28%), var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; position: relative; overflow: hidden; }
+    body::before, body::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+    body::before { background: radial-gradient(circle at 18% 10%, rgba(124,91,255,0.18), transparent 32%), radial-gradient(circle at 82% 18%, rgba(45,244,198,0.18), transparent 28%); filter: blur(30px); }
+    body::after { background-image: linear-gradient(120deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 20%, rgba(255,255,255,0.04) 40%, rgba(255,255,255,0) 60%), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" opacity="0.14"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="%237c5bff" offset="0"/><stop stop-color="%232df4c6" offset="1"/></linearGradient></defs><path d="M200 26 L232 150 L374 174 L254 246 L280 378 L200 304 L120 378 L146 246 L26 174 L168 150 Z" fill="none" stroke="url(%23g)" stroke-width="18" stroke-linejoin="round"/><circle cx="200" cy="200" r="34" fill="%232df4c6" opacity="0.6"/></svg>'); mix-blend-mode: screen; background-size: cover; background-position: center; opacity: 0.8; filter: blur(4px); }
+    .app-shell { position: relative; width: min(1180px, 100%); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; display: grid; grid-template-columns: 280px 1fr 260px; min-height: 80vh; max-height: 92vh; backdrop-filter: blur(10px); }
+    .app-shell::before, .app-shell::after { content: ''; position: absolute; inset: 0; pointer-events: none; }
+    .app-shell::before { background: radial-gradient(circle at 18% 30%, rgba(124,91,255,0.14), transparent 35%), radial-gradient(circle at 90% 70%, rgba(45,244,198,0.12), transparent 30%); opacity: 0.9; }
+    .app-shell::after { background: linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0)), repeating-linear-gradient(90deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 40px); mix-blend-mode: screen; }
+    @media (max-width: 1024px) { .app-shell { grid-template-columns: 240px 1fr; max-height: none; height: calc(100vh - 24px); } .aside-right { display:none; } }
+    .aside-left { position: relative; border-right: 1px solid var(--line); display: grid; grid-template-rows: auto auto 1fr; background: var(--panel-2); overflow: hidden; }
+    .aside-left::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 80% 10%, rgba(45,244,198,0.06), transparent 30%); pointer-events: none; }
+    .topbar { padding: 12px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; }
+    .avatar { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 14px; box-shadow: 0 10px 26px rgba(124,91,255,0.35); }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #34d07f; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .list { overflow-y: auto; }
+    .list-item { position: relative; display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background 0.14s ease, transform 0.18s ease; overflow: hidden; }
+    .list-item::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(124,91,255,0.08), rgba(45,244,198,0.08)); opacity: 0; transition: opacity 0.18s ease; }
+    .list-item:hover { transform: translateX(2px); }
+    .list-item:hover::after { opacity: 1; }
+    .list-item > * { position: relative; z-index: 1; }
+    .list-item.active { background: rgba(124,93,255,0.12); box-shadow: inset 0 0 0 1px rgba(124,91,255,0.25); }
+    .pill { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; display: inline-flex; width: fit-content; }
+    .search { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; background: linear-gradient(135deg, rgba(124,91,255,0.08), rgba(45,244,198,0.05)); }
+    .input { width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line); background: #0c1126; color: var(--text); font-size: 14px; }
+    .input:focus { outline: 2px solid rgba(124,93,255,0.7); outline-offset: 1px; }
+    .chat { position: relative; display: grid; grid-template-rows: auto 1fr auto; height: 100%; background: #0c1022; min-height: 0; overflow: hidden; }
+    .chat::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 70% 10%, rgba(45,244,198,0.08), transparent 30%), radial-gradient(circle at 20% 80%, rgba(124,91,255,0.08), transparent 30%), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" opacity="0.12"><g stroke="%232df4c6" stroke-width="1.2" stroke-dasharray="6 6" fill="none"><path d="M10 30h180M10 70h180M10 110h180M10 150h180"/></g></svg>'); background-size: cover; mix-blend-mode: screen; pointer-events: none; }
+    .chat-header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
+    .chat-header .name { font-weight: 700; }
+    .chat-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; position: relative; z-index: 1; }
+    .bubble { max-width: 72%; padding: 10px 12px; border-radius: 14px; font-size: 14px; line-height: 1.45; word-break: break-word; box-shadow: 0 10px 28px rgba(0,0,0,0.22); }
+    .bubble.them { background: rgba(20,24,53,0.9); color: #dfe2ff; border: 1px solid #1e2448; align-self: flex-start; }
+    .bubble.me { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; align-self: flex-end; }
+    .bubble.hint { background: #0f1329; color: var(--muted); border: 1px dashed var(--line); align-self: center; }
+    .chat-input { border-top: 1px solid var(--line); padding: 10px 12px; display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+    .attach-btn { border: 1px solid var(--line); background: #0d1328; color: var(--text); border-radius: 9px; width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer; font-size: 16px; }
+    .send-btn { border: none; border-radius: 10px; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; width: 40px; height: 40px; font-size: 17px; cursor: pointer; box-shadow: 0 8px 20px rgba(91,141,239,0.28); }
+    .aside-right { position: relative; border-left: 1px solid var(--line); background: var(--panel-2); padding: 14px; display: grid; gap: 12px; overflow: hidden; }
+    .aside-right::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 70% 10%, rgba(124,91,255,0.14), transparent 32%), radial-gradient(circle at 10% 90%, rgba(45,244,198,0.12), transparent 32%); pointer-events: none; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; background: #0f132a; border: 1px solid var(--line); padding: 6px 10px; border-radius: 999px; color: var(--muted); font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; }
+    .login-overlay { position: fixed; inset: 0; background: rgba(5,6,11,0.85); display: grid; place-items: center; backdrop-filter: blur(8px); z-index: 20; }
+    .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; padding: 18px; width: min(340px, 90vw); box-shadow: var(--shadow); display: grid; gap: 10px; position: relative; overflow: hidden; }
+    .card::after { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 20% 0%, rgba(124,91,255,0.22), transparent 38%); pointer-events: none; }
+    .btn { padding: 9px 12px; border-radius: 9px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font-weight: 700; cursor: pointer; box-shadow: 0 8px 20px rgba(91,141,239,0.3); font-size: 14px; }
+    .mini-btn { padding: 6px 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.05); color: #fff; font-weight: 700; cursor: pointer; font-size: 12px; }
+    .empty { color: var(--muted); text-align: center; margin-top: 40px; font-size: 13px; }
+    .media { max-width: 360px; border-radius: 10px; border: 1px solid var(--line); }
+    .help-card { background: #0f152b; border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: grid; gap: 6px; color: var(--muted); font-size: 12px; box-shadow: 0 14px 30px rgba(0,0,0,0.28); }
+    .banner { position: relative; border-radius: 12px; padding: 12px; background-image: linear-gradient(135deg, rgba(124,91,255,0.28), rgba(45,244,198,0.24)), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><defs><linearGradient id="g2" x1="0" x2="1" y1="0" y2="1"><stop stop-color="%23030510" offset="0"/><stop stop-color="%23101630" offset="1"/></linearGradient></defs><rect width="320" height="180" fill="url(%23g2)"/><path d="M60 120 Q90 70 140 82 Q186 96 210 70 Q232 48 270 66" fill="none" stroke="%232df4c6" stroke-width="6" stroke-linecap="round" stroke-opacity="0.9"/><path d="M190 120 L230 90 L260 120 L230 150 Z" fill="%237c5bff" fill-opacity="0.6"/><circle cx="120" cy="70" r="10" fill="%232df4c6"/><circle cx="210" cy="65" r="7" fill="%237c5bff"/></svg>'); background-size: cover; background-position: center; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,0.35); }
+    .banner::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(3,5,16,0) 0%, rgba(3,5,16,0.6) 100%); }
+    .banner h3 { margin: 0; position: relative; z-index: 1; }
+    .banner p { margin: 2px 0 0; position: relative; z-index: 1; color: #dce6ff; }
+    .poster { position: relative; border-radius: 12px; overflow: hidden; height: 160px; background-image: linear-gradient(135deg, rgba(124,91,255,0.2), rgba(45,244,198,0.2)), url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="%23030510"/><g fill="none" stroke="%235063ff" stroke-width="2" opacity="0.35"><path d="M0 40 H320"/><path d="M0 80 H320"/><path d="M0 120 H320"/><path d="M0 160 H320"/></g><g fill="none" stroke="%232df4c6" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"><path d="M80 150 L120 70 L160 140 L190 90 L230 140 L260 60"/></g><g fill="%237c5bff" opacity="0.7"><circle cx="120" cy="70" r="10"/><circle cx="190" cy="90" r="9"/><circle cx="260" cy="60" r="9"/></g><g fill="%232df4c6" opacity="0.8"><circle cx="160" cy="140" r="11"/><circle cx="230" cy="140" r="11"/></g></svg>'); background-size: cover; background-position: center; }
+    .poster::after { content: 'Ninja Relay'; position: absolute; left: 14px; bottom: 12px; font-weight: 800; letter-spacing: 1px; color: #f7fbff; text-transform: uppercase; text-shadow: 0 8px 20px rgba(0,0,0,0.45); }
+    .chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: #dbe6ff; font-size: 12px; }
+    .chip.glow { box-shadow: 0 0 0 1px rgba(45,244,198,0.3), 0 10px 20px rgba(45,244,198,0.2); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useEffect, useMemo, useState } = React;
+
+    const isValidName = (name) => {
+      const cleaned = (name || '').toString().trim().replace(/[^a-zA-Z0-9_-]/g, '');
+      return cleaned.length > 0 ? cleaned : null;
+    };
+
+    const useSocket = () => {
+      const [username, setUsername] = useState(null);
+      const [users, setUsers] = useState([]);
+      const [messages, setMessages] = useState({}); // user -> array
+      const usernameRef = React.useRef(null);
+      const socket = useMemo(() => io(), []);
+
+      useEffect(() => { usernameRef.current = username; }, [username]);
+
+      useEffect(() => {
+        socket.on('auth:ok', data => { setUsername(data.username); socket.emit('presence:list'); });
+        socket.on('presence:update', payload => setUsers(payload.users || []));
+        socket.on('dm:message', msg => {
+          setMessages(prev => {
+            const current = usernameRef.current;
+            const other = msg.from === current ? msg.to : msg.from;
+            const arr = prev[other] ? [...prev[other]] : [];
+            return { ...prev, [other]: [...arr, msg] };
+          });
+        });
+        socket.on('dm:history', ({ withUser, messages: history }) => {
+          setMessages(prev => ({ ...prev, [withUser]: history || [] }));
+        });
+        return () => socket.disconnect();
+      }, [socket]);
+
+      const login = name => {
+        const cleaned = isValidName(name);
+        if (!cleaned) return;
+        socket.emit('auth:login', cleaned);
+      };
+      const requestPresence = () => socket.emit('presence:list');
+      const requestHistory = other => socket.emit('dm:history', { withUser: other });
+      const send = (to, payload) => {
+        if (!to) return;
+        if (typeof payload === 'string') {
+          socket.emit('dm:send', { to, kind: 'text', text: payload });
+        } else {
+          socket.emit('dm:send', { to, ...payload });
+        }
+      };
+
+      return { username, users, messages, login, requestPresence, requestHistory, send };
+    };
+
+    const Login = ({ onLogin }) => {
+      const [name, setName] = useState('');
+      const [error, setError] = useState('');
+      const submit = () => {
+        const cleaned = isValidName(name);
+        if (!cleaned) { setError('Use letters/numbers/_/- only'); return; }
+        setError('');
+        onLogin(cleaned);
+      };
+      return (
+        <div className="login-overlay">
+          <div className="card">
+            <h2 style={{margin:0}}>Sign in</h2>
+            <p className="muted" style={{margin:0}}>Choose a handle to chat with others.</p>
+            <input className="input" placeholder="Your username" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit(); }} />
+            {error && <div className="muted" style={{color:'#ff9b9b'}}>{error}</div>}
+            <button className="btn" onClick={submit}>Continue</button>
+          </div>
+        </div>
+      );
+    };
+
+    const UserList = ({ users, me, active, onSelect, messages }) => {
+      const filtered = users.filter(u => u !== me);
+      const preview = (u) => {
+        const thread = messages[u] || [];
+        const lastFromUser = [...thread].reverse().find(m => m.from === u);
+        if (!lastFromUser) return 'No messages yet';
+        if (lastFromUser.kind === 'image') return '[Image]';
+        if (lastFromUser.kind === 'video') return '[Video]';
+        if (lastFromUser.kind === 'audio') return '[Audio]';
+        return (lastFromUser.text || '').toString().slice(0, 60);
+      };
+      return (
+        <div className="list">
+          {filtered.length === 0 && <div className="empty">No other users online yet.</div>}
+          {filtered.map(u => (
+            <div key={u} className={`list-item ${active === u ? 'active' : ''}`} onClick={() => onSelect(u)}>
+              <div className="avatar">{u.slice(0,2).toUpperCase()}</div>
+              <div>
+                <div style={{fontWeight:700}}>{u}</div>
+                <div className="muted" style={{fontSize:'12px', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:'160px'}}>{preview(u)}</div>
+              </div>
+              <div className="status-dot"></div>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    const ChatWindow = ({ me, peer, messages, onSend }) => {
+      const [text, setText] = useState('');
+      const [recording, setRecording] = useState(false);
+      const mediaRecorderRef = React.useRef(null);
+      const chunksRef = React.useRef([]);
+      const fileInputRef = React.useRef(null);
+      const messagesRef = React.useRef(null);
+      useEffect(() => { setText(''); }, [peer]);
+      useEffect(() => { if (messagesRef.current) messagesRef.current.scrollTop = messagesRef.current.scrollHeight; });
+
+      const emitSend = (payload) => {
+        if (!peer) return;
+        onSend(peer, payload);
+      };
+
+      const submit = () => {
+        const value = text.trim();
+        if (!value) return;
+        emitSend({ kind: 'text', text: value });
+        setText('');
+      };
+
+      const handleFile = async (file) => {
+        if (!file) return;
+        const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('video/') ? 'video' : 'audio';
+        const reader = new FileReader();
+        reader.onload = () => {
+          emitSend({ kind, text: '', mediaType: file.type, mediaData: reader.result });
+        };
+        reader.readAsDataURL(file);
+      };
+
+      const startRecording = async () => {
+        if (!navigator.mediaDevices?.getUserMedia) return;
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mr = new MediaRecorder(stream);
+        chunksRef.current = [];
+        mediaRecorderRef.current = mr;
+        mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+        mr.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            emitSend({ kind: 'audio', text: '', mediaType: 'audio/webm', mediaData: reader.result });
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach(t => t.stop());
+        };
+        mr.start();
+        setRecording(true);
+      };
+
+      const stopRecording = () => {
+        const mr = mediaRecorderRef.current;
+        if (mr && mr.state !== 'inactive') {
+          mr.stop();
+        }
+        setRecording(false);
+      };
+
+      if (!peer) return <div className="chat"><div className="chat-body"><div className="bubble hint">Select a user on the left to start a conversation.</div></div></div>;
+      const thread = messages[peer] || [];
+      return (
+        <div className="chat">
+          <div className="chat-header">
+            <div className="avatar">{peer.slice(0,2).toUpperCase()}</div>
+            <div>
+              <div className="name">{peer}</div>
+              <div className="muted" style={{fontSize:'12px'}}>Direct message</div>
+            </div>
+                <div style={{marginLeft:'auto'}} className="chip glow">Stealth Tunnel</div>
+          </div>
+          <div className="chat-body" ref={messagesRef}>
+            {thread.length === 0 && <div className="bubble hint">Say hello to {peer}.</div>}
+            {thread.map(msg => {
+              const mine = msg.from === me;
+              const key = msg.id || msg.createdAt;
+              if (msg.kind === 'image') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><img className="media" src={msg.mediaData} alt="image" /></div>;
+              if (msg.kind === 'video') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><video className="media" src={msg.mediaData} controls></video></div>;
+              if (msg.kind === 'audio') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><audio controls src={msg.mediaData}></audio></div>;
+              return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}>{msg.text}</div>;
+            })}
+          </div>
+          <div className="chat-input">
+            <button className="attach-btn" title="Attach file" onClick={() => fileInputRef.current?.click()}>📎</button>
+            <input className="input" placeholder={`Message ${peer}`} value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
+            <button className="send-btn" onClick={submit}>→</button>
+            <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" style={{display:'none'}} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value=''; }} />
+            <button className="attach-btn" title="Voice note" onClick={recording ? stopRecording : startRecording}>{recording ? '■' : '🎤'}</button>
+          </div>
+        </div>
+      );
+    };
+
+    const AsideRight = ({ peer }) => (
+      <div className="aside-right">
+        <div className="poster"></div>
+        <h3 style={{margin:'0 0 6px'}}>Chat Info</h3>
+        {peer ? (
+          <>
+            <div className="tag">User</div>
+            <div style={{fontWeight:700}}>{peer}</div>
+            <div className="muted">1:1 conversation</div>
+          </>
+        ) : (
+          <div className="muted">Select a conversation to see details.</div>
+        )}
+        <div className="help-card">
+          <div style={{fontWeight:700, color:'#f4f6ff'}}>Ninja Tips</div>
+          <div>• Boot the dojo: chatapp/server → node index.js</div>
+          <div>• Join via LAN: http://YOUR-LAN-IP:4000</div>
+          <div>• Green spark = online stealth ally</div>
+          <div>• Drop text, images, video, or voice with clip/mic</div>
+        </div>
+      </div>
+    );
+
+    const App = () => {
+      const { username, users, messages, login, requestPresence, requestHistory, send } = useSocket();
+      const [activeUser, setActiveUser] = useState(null);
+
+      useEffect(() => { if (username) requestPresence(); }, [username, requestPresence]);
+      useEffect(() => {
+        if (!username) return;
+        const id = setInterval(() => requestPresence(), 5000);
+        return () => clearInterval(id);
+      }, [username, requestPresence]);
+
+      useEffect(() => {
+        if (activeUser) return;
+        const firstOther = users.find(u => u !== username);
+        if (firstOther) setActiveUser(firstOther);
+      }, [users, username, activeUser]);
+
+      const selectUser = (u) => {
+        setActiveUser(u);
+        requestHistory(u);
+      };
+
+      return (
+        <>
+          {!username && <Login onLogin={login} />}
+          <div className="app-shell">
+            <div className="aside-left">
+              <div className="topbar">
+                <div className="avatar">{(username || '??').slice(0,2).toUpperCase()}</div>
+                <div>
+                  <div style={{fontWeight:700}}>{username || 'Not signed in'}</div>
+                  <div className="muted" style={{fontSize:'12px'}}>Direct Messages • Ninja Net</div>
+                </div>
+                <div style={{marginLeft:'auto'}} className="chip glow">Stealth ON</div>
+              </div>
+              <div className="search">
+                <div className="banner">
+                  <h3>Shadow Relay</h3>
+                  <p>Encrypted drops with neon ninja energy.</p>
+                  <div style={{display:'flex', gap:'8px', alignItems:'center', marginTop:'6px'}}>
+                    <span className="chip">Holo Link</span>
+                    <span className="chip glow">Latency Safe</span>
+                    <button className="mini-btn" onClick={requestPresence}>Ping squad</button>
+                  </div>
+                </div>
+                <div className="pill">Online • {Math.max(users.length - 1, 0)}</div>
+                <button className="btn" style={{padding:'6px 10px', boxShadow:'none', marginTop:'8px'}} onClick={requestPresence}>Refresh list</button>
+              </div>
+              <UserList users={users} me={username} active={activeUser} onSelect={selectUser} messages={messages} />
+            </div>
+            <ChatWindow me={username} peer={activeUser} messages={messages} onSend={send} />
+            <AsideRight peer={activeUser} />
+          </div>
+        </>
+      );
+    };
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

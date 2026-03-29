@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Chat Application Showcase</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.08), transparent 28%),
+						 radial-gradient(circle at 80% 10%, rgba(255,255,255,0.06), transparent 24%),
+						 #05060b;
+			--card: #0d1021;
+			--panel: #10132b;
+			--muted: #b6b8c7;
+			--text: #e6e8f0;
+			--accent: #7c5dff;
+			--accent-2: #ff7aa2;
+			--line: #1d2139;
+			--shadow: 0 18px 50px rgba(0,0,0,0.35);
+			font-family: 'Manrope', system-ui, sans-serif;
+		}
+
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			min-height: 100vh;
+			background: var(--bg);
+			color: var(--text);
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 32px 20px 64px;
+		}
+
+		.shell {
+			width: min(1200px, 100%);
+			display: flex;
+			flex-direction: column;
+			gap: 32px;
+			align-items: center;
+		}
+
+		h1 {
+			margin: 0;
+			font-size: clamp(28px, 4vw, 36px);
+			letter-spacing: 0.02em;
+			text-align: center;
+		}
+
+		.subhead {
+			margin: -6px 0 4px;
+			color: var(--muted);
+			font-size: 15px;
+			text-align: center;
+			max-width: 640px;
+		}
+
+		.cta-row {
+			display: flex;
+			gap: 10px;
+			flex-wrap: wrap;
+			justify-content: center;
+		}
+
+		.btn {
+			border: 1px solid var(--line);
+			background: linear-gradient(135deg, rgba(124,93,255,0.9), rgba(91,212,255,0.9));
+			color: #fff;
+			padding: 10px 16px;
+			border-radius: 12px;
+			cursor: pointer;
+			font-weight: 700;
+			box-shadow: 0 10px 28px rgba(124,93,255,0.35);
+			transition: transform 0.12s ease, box-shadow 0.12s ease;
+		}
+		.btn.secondary {
+			background: #0f1227;
+			color: var(--text);
+			box-shadow: none;
+		}
+		.btn:active { transform: translateY(1px); box-shadow: 0 6px 16px rgba(0,0,0,0.25); }
+
+		.mock {
+			width: 100%;
+			background: var(--card);
+			border-radius: 18px;
+			border: 1px solid var(--line);
+			box-shadow: var(--shadow);
+			overflow: hidden;
+			position: relative;
+		}
+
+		.chrome {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 14px 18px;
+			background: #0b0d18;
+			border-bottom: 1px solid var(--line);
+		}
+
+		.chrome .dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+		}
+		.dot.red { background: #ff6565; }
+		.dot.yellow { background: #ffc266; }
+		.dot.green { background: #6ddc90; }
+
+		.frame {
+			display: grid;
+			grid-template-columns: 240px 1fr 320px;
+			gap: 16px;
+			padding: 18px;
+			background: linear-gradient(135deg, #0f1227 0%, #0d1021 35%, #0b0d18 100%);
+		}
+
+		@media (max-width: 1024px) {
+			.frame { grid-template-columns: 1fr; }
+			.sidebar { order: -1; }
+			.chat-panel { order: 1; }
+		}
+
+		.sidebar {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 14px 12px;
+			display: grid;
+			gap: 10px;
+		}
+
+		.sidebar .section-title {
+			text-transform: uppercase;
+			font-size: 12px;
+			color: var(--muted);
+			letter-spacing: 0.08em;
+			margin-bottom: -2px;
+			padding-left: 4px;
+		}
+
+		.nav-item {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 10px 10px;
+			border-radius: 10px;
+			color: var(--muted);
+			cursor: pointer;
+			transition: background 0.18s ease, color 0.18s ease;
+		}
+		.nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+		.nav-item.active { background: rgba(124,93,255,0.12); color: var(--text); }
+
+		.nav-dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 50%;
+			background: var(--accent);
+			box-shadow: 0 0 0 3px rgba(124,93,255,0.15);
+		}
+
+		.settings {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 18px;
+			display: grid;
+			gap: 16px;
+		}
+
+		.settings h3 {
+			margin: 0;
+			font-size: 16px;
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+			gap: 12px;
+		}
+
+		.field {
+			display: grid;
+			gap: 6px;
+		}
+
+		.label {
+			color: var(--muted);
+			font-size: 13px;
+		}
+
+		.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+		.chip {
+			padding: 8px 12px;
+			border-radius: 999px;
+			border: 1px solid var(--line);
+			background: #0f1227;
+			color: var(--text);
+			cursor: pointer;
+			transition: border 0.16s ease, background 0.16s ease;
+		}
+		.chip.active { border-color: rgba(124,93,255,0.8); background: rgba(124,93,255,0.12); }
+		.chip.color { width: 42px; height: 42px; padding: 0; border-radius: 12px; border: 2px solid transparent; }
+		.chip.color::before {
+			content: '';
+			display: block;
+			width: 100%;
+			height: 100%;
+			border-radius: 10px;
+			background: currentColor;
+			box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+		}
+		.chip.color.active { border-color: rgba(124,93,255,0.8); box-shadow: 0 0 0 3px rgba(124,93,255,0.15); }
+
+		.slider-wrap {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.slider {
+			flex: 1;
+			accent-color: var(--accent);
+		}
+
+		.select,
+		.input {
+			width: 100%;
+			padding: 10px 12px;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			background: #0f1227;
+			color: var(--text);
+			font-size: 14px;
+		}
+		.select:focus, .input:focus, .slider:focus-visible {
+			outline: 2px solid rgba(124,93,255,0.7);
+			outline-offset: 1px;
+		}
+
+		.toggle {
+			position: relative;
+			width: 44px;
+			height: 24px;
+			background: #1b1f33;
+			border-radius: 999px;
+			border: 1px solid var(--line);
+			cursor: pointer;
+			transition: background 0.18s ease;
+		}
+		.toggle::after {
+			content: '';
+			position: absolute;
+			top: 2px;
+			left: 2px;
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			background: #fff;
+			transition: transform 0.2s ease;
+			box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+		}
+		.toggle.on { background: var(--accent); }
+		.toggle.on::after { transform: translateX(20px); }
+
+		.chat-panel {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 14px;
+			padding: 16px;
+			display: grid;
+			gap: 12px;
+			position: relative;
+		}
+
+		.chat-meta {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			color: var(--muted);
+			font-size: 13px;
+		}
+		.badge {
+			padding: 6px 10px;
+			border-radius: 999px;
+			background: rgba(124,93,255,0.15);
+			color: #f4f4ff;
+			border: 1px solid rgba(124,93,255,0.3);
+			font-weight: 600;
+		}
+
+		.chat-header {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.avatar {
+			width: 40px;
+			height: 40px;
+			border-radius: 12px;
+			background: linear-gradient(135deg, #7c5dff, #ff7aa2);
+			display: grid;
+			place-items: center;
+			font-weight: 700;
+			color: #fff;
+		}
+		.chat-body {
+			display: grid;
+			gap: 10px;
+			padding: 10px;
+			background: #0f1227;
+			border-radius: 12px;
+			border: 1px solid var(--line);
+			max-height: 260px;
+			overflow-y: auto;
+		}
+		.msg {
+			max-width: 90%;
+			padding: 10px 12px;
+			border-radius: 12px;
+			font-size: 14px;
+			line-height: 1.4;
+		}
+		.msg.bot { background: #151936; color: #cfd1de; border: 1px solid #1f2240; }
+		.msg.user { background: var(--accent); color: #fff; justify-self: end; }
+
+		.composer {
+			display: grid;
+			grid-template-columns: 1fr auto;
+			gap: 10px;
+			align-items: center;
+		}
+		.send-btn {
+			width: 44px;
+			height: 44px;
+			border-radius: 12px;
+			border: none;
+			background: linear-gradient(135deg, var(--accent), #5bd4ff);
+			color: #fff;
+			font-size: 18px;
+			cursor: pointer;
+			box-shadow: 0 12px 30px rgba(124,93,255,0.35);
+			transition: transform 0.1s ease;
+		}
+		.send-btn:active { transform: translateY(1px); }
+
+		.pill-row { display: flex; gap: 8px; align-items: center; }
+		.pill {
+			padding: 6px 10px;
+			border-radius: 999px;
+			background: #13162e;
+			color: var(--muted);
+			font-size: 12px;
+			border: 1px solid var(--line);
+		}
+
+		.tech {
+			width: 100%;
+			display: grid;
+			gap: 14px;
+			justify-items: center;
+		}
+		.tech-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+			gap: 12px;
+			width: 100%;
+		}
+		.tech-card {
+			background: var(--card);
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 14px;
+			display: grid;
+			gap: 8px;
+			place-items: center;
+			box-shadow: var(--shadow);
+		}
+		.tech-icon {
+			width: 52px;
+			height: 52px;
+			border-radius: 14px;
+			display: grid;
+			place-items: center;
+			font-weight: 700;
+			color: #fff;
+			background: linear-gradient(135deg, rgba(124,93,255,0.9), rgba(91,212,255,0.9));
+		}
+		.tech-name { color: #dfe1ec; font-weight: 600; }
+
+		.footer {
+			text-align: center;
+			color: var(--muted);
+			font-size: 13px;
+			margin-top: 4px;
+		}
+	</style>
+</head>
+<body>
+	<div class="shell">
+		<h1>Chat Application</h1>
+		<p class="subhead">Configurable chat widget, live preview, and a clean stack overview so stakeholders see the essentials at a glance.</p>
+		<div class="cta-row">
+			<button class="btn">Open Live Preview</button>
+			<button class="btn secondary">Get Implementation Guide</button>
+		</div>
+		<section class="mock">
+			<div class="chrome">
+				<span class="dot red"></span>
+				<span class="dot yellow"></span>
+				<span class="dot green"></span>
+			</div>
+			<div class="frame">
+				<aside class="sidebar">
+					<div class="section-title">Live Chat</div>
+					<div class="nav-item active"><span class="nav-dot"></span>Appearance</div>
+					<div class="nav-item">Settings</div>
+					<div class="nav-item">Widget</div>
+					<div class="nav-item">Inbox</div>
+					<div class="nav-item">Contacts</div>
+					<div class="section-title">Account</div>
+					<div class="nav-item">Teams</div>
+					<div class="nav-item">Operating Hours</div>
+					<div class="nav-item">Quick Responses</div>
+					<div class="nav-item">Automations</div>
+				</aside>
+
+				<section class="settings">
+					<div class="pill-row">
+						<div class="pill">Widget Settings</div>
+						<div class="pill">Visible on desktop and mobile</div>
+					</div>
+					<div class="grid">
+						<div class="field">
+							<div class="label">Background Color</div>
+							<div class="chip-row">
+								<button class="chip color active" aria-label="Purple" data-color="#7c5dff"></button>
+								<button class="chip color" aria-label="Pink" data-color="#ff7aa2"></button>
+								<button class="chip color" aria-label="Cyan" data-color="#5bd4ff"></button>
+								<button class="chip color" aria-label="Amber" data-color="#f4b400"></button>
+								<button class="chip color" aria-label="Midnight" data-color="#1c1f38"></button>
+							</div>
+						</div>
+						<div class="field">
+							<div class="label">Online Status</div>
+							<div class="chip-row">
+								<button class="chip active">We reply immediately</button>
+								<button class="chip">We reply within a few mins</button>
+							</div>
+						</div>
+						<div class="field">
+							<div class="label">Widget Position</div>
+							<div class="slider-wrap">
+								<span class="label">Left</span>
+								<input class="slider" type="range" min="0" max="1" step="1" value="1">
+								<span class="label">Right</span>
+							</div>
+						</div>
+						<div class="field">
+							<div class="label">Chat Visibility</div>
+							<select class="select">
+								<option>Both on desktop and mobile devices</option>
+								<option>Desktop only</option>
+								<option>Mobile only</option>
+							</select>
+						</div>
+						<div class="field">
+							<div class="label">Offline Status</div>
+							<select class="select">
+								<option>We are available within a few minutes</option>
+								<option>We reply within 1 hour</option>
+							</select>
+						</div>
+						<div class="field">
+							<div class="label">Offline Message</div>
+							<input class="input" value="We are temporarily unavailable. Please leave your details and we will follow up as soon as we are back online." />
+						</div>
+						<div class="field">
+							<div class="label">Button Label</div>
+							<input class="input" value="Chat with us" />
+						</div>
+						<div class="field" style="align-items:flex-start; gap:8px;">
+							<div class="label">Enable widget</div>
+							<div class="toggle on" id="toggle"></div>
+						</div>
+					</div>
+				</section>
+
+				<section class="chat-panel">
+					<div class="chat-meta">
+						<span>Preview • Online</span>
+						<span class="badge">Response SLA: instant</span>
+					</div>
+					<div class="chat-header">
+						<div class="avatar">BB</div>
+						<div>
+							<div style="font-weight:700;">Bella Boutique</div>
+							<div style="color:var(--muted); font-size:13px;">We reply immediately</div>
+						</div>
+					</div>
+					<div class="chat-body">
+						<div class="msg bot">Hi! Thanks for reaching out. How can we help today?</div>
+						<div class="msg user">I am looking for a navy blazer.</div>
+						<div class="msg bot">Great choice. We have a slim-fit in stock. What size do you need?</div>
+						<div class="msg user">Size 40, please.</div>
+					</div>
+					<div class="composer">
+						<input class="input" placeholder="Enter your message..." id="composer-input">
+						<button class="send-btn">→</button>
+					</div>
+				</section>
+			</div>
+		</section>
+
+		<section class="tech">
+			<div class="pill">Tech Stack</div>
+			<div class="tech-grid">
+				<div class="tech-card">
+					<div class="tech-icon">R</div>
+					<div class="tech-name">React</div>
+				</div>
+				<div class="tech-card">
+					<div class="tech-icon">S</div>
+					<div class="tech-name">Socket.IO</div>
+				</div>
+				<div class="tech-card">
+					<div class="tech-icon">E</div>
+					<div class="tech-name">Express.js</div>
+				</div>
+				<div class="tech-card">
+					<div class="tech-icon">N</div>
+					<div class="tech-name">Node.js</div>
+				</div>
+				<div class="tech-card">
+					<div class="tech-icon">M</div>
+					<div class="tech-name">MongoDB</div>
+				</div>
+				<div class="tech-card">
+					<div class="tech-icon">SQL</div>
+					<div class="tech-name">MySQL</div>
+				</div>
+			</div>
+		</section>
+
+		<div class="footer">Built for modern support teams • Ready for desktop and mobile</div>
+	</div>
+
+	<script>
+		// Keep chips mutually exclusive and update header accent color for quick visual feedback.
+		const chips = document.querySelectorAll('.chip[data-color]');
+		const header = document.querySelector('.chat-panel');
+		chips.forEach(chip => {
+			chip.addEventListener('click', () => {
+				chips.forEach(c => c.classList.remove('active'));
+				chip.classList.add('active');
+				header.style.boxShadow = `0 10px 30px ${chip.dataset.color}33`;
+				document.documentElement.style.setProperty('--accent', chip.dataset.color);
+			});
+		});
+
+		// Simple toggle interaction.
+		const toggle = document.getElementById('toggle');
+		toggle.addEventListener('click', () => toggle.classList.toggle('on'));
+
+		// Slider mirrors position label.
+		const slider = document.querySelector('.slider');
+		const labelLeft = slider.previousElementSibling;
+		const labelRight = slider.nextElementSibling;
+		const refreshSlider = () => {
+			const isRight = slider.value === '1';
+			labelLeft.style.color = isRight ? 'var(--muted)' : 'var(--text)';
+			labelRight.style.color = isRight ? 'var(--text)' : 'var(--muted)';
+		};
+		slider.addEventListener('input', refreshSlider);
+		refreshSlider();
+
+		// Lightweight chat composer so the preview feels alive.
+		const chatBody = document.querySelector('.chat-body');
+		const input = document.getElementById('composer-input');
+		const sendBtn = document.querySelector('.send-btn');
+		const botReplies = [
+			"Noted! I'll share options in your size.",
+			"Got it. Do you prefer slim or regular fit?",
+			"We can ship today. Want express delivery?",
+			"I can also suggest accessories to match."
+		];
+
+		const appendBubble = (text, role) => {
+			const bubble = document.createElement('div');
+			bubble.className = `msg ${role}`;
+			bubble.textContent = text;
+			chatBody.appendChild(bubble);
+			chatBody.scrollTop = chatBody.scrollHeight;
+		};
+
+		const sendMessage = () => {
+			const value = input.value.trim();
+			if (!value) return;
+			appendBubble(value, 'user');
+			input.value = '';
+			setTimeout(() => {
+				const reply = botReplies[Math.floor(Math.random() * botReplies.length)];
+				appendBubble(reply, 'bot');
+			}, 400);
+		};
+
+		sendBtn.addEventListener('click', sendMessage);
+		input.addEventListener('keydown', e => {
+			if (e.key === 'Enter' && !e.shiftKey) {
+				e.preventDefault();
+				sendMessage();
+			}
+		});
+	</script>
+</body>
+</html>
