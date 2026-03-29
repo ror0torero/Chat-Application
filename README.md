@@ -5,16 +5,15 @@ A minimal direct-messaging app (Instagram-style DMs). Users pick a handle, see w
 ## Quick start
 
 1. Install dependencies:
-   - Open a terminal and run:
-     - `cd chatapp/server`
-     - `npm install`
+   - `cd chatapp/server`
+   - `npm install`
 
 2. Run the server (serves frontend too):
    - `npm run dev` (reloads on changes) or `npm start`
-   - The app is available at http://localhost:4000
+   - App at http://localhost:4000
 
 3. Test chat:
-   - Open the app in two browser windows, choose different usernames, and DM between them in real time.
+   - Open two browser windows, choose different usernames, and DM between them.
 
 ## Configuration (optional)
 
