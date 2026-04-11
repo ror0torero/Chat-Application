@@ -12,6 +12,7 @@ obj/
 *.log
 *.tmp
 *.temp
+server/server/tmp/
 
 # OS/editor junk
 .DS_Store
