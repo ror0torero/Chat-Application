@@ -48,7 +48,7 @@
     .pill { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); font-size: 11px; display: inline-flex; width: fit-content; }
     .search { padding: 10px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(120,120,120,0.08)); }
     .input { width: 100%; padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line); background: #0c1126; color: var(--text); font-size: 14px; }
-    .input:focus { outline: 2px solid rgba(124,93,255,0.7); outline-offset: 1px; }
+    .input:focus { outline: 2px solid rgba(192, 198, 208, 0.82); outline-offset: 1px; }
     .chat { position: relative; display: grid; grid-template-rows: auto 1fr auto; height: 100%; background: #0f0f0f; min-height: 0; overflow: hidden; }
     .chat::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 70% 10%, rgba(255,255,255,0.04), transparent 30%), radial-gradient(circle at 20% 80%, rgba(140,140,140,0.06), transparent 30%); background-size: cover; mix-blend-mode: screen; pointer-events: none; }
     .chat-header { padding: 12px 14px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; position: relative; z-index: 1; }
@@ -123,23 +123,31 @@
     const useSocket = () => {
       const [username, setUsername] = useState(null);
       const [isAdmin, setIsAdmin] = useState(false);
+      const [connected, setConnected] = useState(false);
       const [users, setUsers] = useState([]);
       const [messages, setMessages] = useState({});
       const [groups, setGroups] = useState([]);
       const [discoverableGroups, setDiscoverableGroups] = useState([]);
       const [groupMessages, setGroupMessages] = useState({});
       const [groupMembers, setGroupMembers] = useState({});
+      const [dmTyping, setDmTyping] = useState({});
+      const [groupTyping, setGroupTyping] = useState({});
       const [adminUsers, setAdminUsers] = useState([]);
       const [auditLogs, setAuditLogs] = useState([]);
       const [authError, setAuthError] = useState('');
       const [appError, setAppError] = useState('');
       const appErrorTimerRef = React.useRef(null);
       const usernameRef = React.useRef(null);
+      const typingTimersRef = React.useRef(new Map());
       const socket = useMemo(() => io(), []);
 
       useEffect(() => { usernameRef.current = username; }, [username]);
 
       useEffect(() => {
+        setConnected(socket.connected);
+        socket.on('connect', () => setConnected(true));
+        socket.on('disconnect', () => setConnected(false));
+
         socket.on('auth:ok', data => {
           setUsername(data.username);
           setIsAdmin(!!data.isAdmin);
@@ -212,8 +220,46 @@
           setMessages(prev => ({ ...prev, [withUser]: history || [] }));
         });
 
+        socket.on('dm:typing', ({ from, isTyping }) => {
+          const key = `dm:${from}`;
+          setDmTyping(prev => ({ ...prev, [from]: !!isTyping }));
+          const existing = typingTimersRef.current.get(key);
+          if (existing) clearTimeout(existing);
+          if (isTyping) {
+            const timer = setTimeout(() => {
+              setDmTyping(prev => ({ ...prev, [from]: false }));
+            }, 2200);
+            typingTimersRef.current.set(key, timer);
+          }
+        });
+
+        socket.on('group:typing', ({ group, from, isTyping }) => {
+          if (!group || !from) return;
+          const key = `group:${group}:${from}`;
+          setGroupTyping(prev => {
+            const groupSet = new Set(prev[group] || []);
+            if (isTyping) groupSet.add(from);
+            else groupSet.delete(from);
+            return { ...prev, [group]: Array.from(groupSet) };
+          });
+          const existing = typingTimersRef.current.get(key);
+          if (existing) clearTimeout(existing);
+          if (isTyping) {
+            const timer = setTimeout(() => {
+              setGroupTyping(prev => {
+                const groupSet = new Set(prev[group] || []);
+                groupSet.delete(from);
+                return { ...prev, [group]: Array.from(groupSet) };
+              });
+            }, 2200);
+            typingTimersRef.current.set(key, timer);
+          }
+        });
+
         return () => {
           if (appErrorTimerRef.current) clearTimeout(appErrorTimerRef.current);
+          for (const timer of typingTimersRef.current.values()) clearTimeout(timer);
+          typingTimersRef.current.clear();
           socket.disconnect();
         };
       }, [socket]);
@@ -227,6 +273,7 @@
       const requestPresence = () => socket.emit('presence:list');
       const requestHistory = other => socket.emit('dm:history', { withUser: other });
       const sendDM = (to, payload) => socket.emit('dm:send', { to, ...payload });
+      const sendDMTyping = (to, isTyping) => socket.emit('dm:typing', { to, isTyping });
 
       const requestGroups = () => socket.emit('group:list');
       const createGroup = name => socket.emit('group:create', { name });
@@ -237,6 +284,7 @@
       const setGroupRole = (group, targetUser, role) => socket.emit('group:member:role', { group, targetUser, role });
       const removeGroupMember = (group, targetUser) => socket.emit('group:member:remove', { group, targetUser });
       const sendGroup = (group, payload) => socket.emit('group:send', { group, ...payload });
+      const sendGroupTyping = (group, isTyping) => socket.emit('group:typing', { group, isTyping });
 
       const requestAdminUsers = () => socket.emit('admin:users:list');
       const requestAdminAudit = () => socket.emit('admin:audit:list');
@@ -246,12 +294,15 @@
       return {
         username,
         isAdmin,
+        connected,
         users,
         messages,
         groups,
         discoverableGroups,
         groupMessages,
         groupMembers,
+        dmTyping,
+        groupTyping,
         adminUsers,
         auditLogs,
         authError,
@@ -260,6 +311,7 @@
         requestPresence,
         requestHistory,
         sendDM,
+        sendDMTyping,
         requestGroups,
         createGroup,
         joinGroup,
@@ -269,6 +321,7 @@
         setGroupRole,
         removeGroupMember,
         sendGroup,
+        sendGroupTyping,
         requestAdminUsers,
         requestAdminAudit,
         addUser,
@@ -352,7 +405,7 @@
       );
     };
 
-    const ChatWindow = ({ me, activeChat, messages, groupMessages, onSendDM, onSendGroup }) => {
+    const ChatWindow = ({ me, activeChat, messages, groupMessages, typingStatus, connected, onSendDM, onSendGroup, onTypingDM, onTypingGroup }) => {
       const [text, setText] = useState('');
       const [recording, setRecording] = useState(false);
       const mediaRecorderRef = React.useRef(null);
@@ -360,6 +413,7 @@
       const fileInputRef = React.useRef(null);
       const messagesRef = React.useRef(null);
       const prevThreadLenRef = React.useRef(0);
+      const typingStopTimerRef = React.useRef(null);
 
       const mode = activeChat?.type;
       const target = activeChat?.id;
@@ -382,6 +436,12 @@
         prevThreadLenRef.current = nextLen;
       }, [thread.length]);
 
+      useEffect(() => {
+        return () => {
+          if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+        };
+      }, []);
+
       const emitSend = (payload) => {
         if (!target) return;
         if (isGroup) onSendGroup(target, payload);
@@ -391,8 +451,23 @@
       const submit = () => {
         const value = text.trim();
         if (!value) return;
+        if (!connected) return;
         emitSend({ kind: 'text', text: value });
+        if (isGroup) onTypingGroup(target, false);
+        else onTypingDM(target, false);
         setText('');
+      };
+
+      const handleTextChange = (value) => {
+        setText(value);
+        if (!target) return;
+        if (isGroup) onTypingGroup(target, value.trim().length > 0);
+        else onTypingDM(target, value.trim().length > 0);
+        if (typingStopTimerRef.current) clearTimeout(typingStopTimerRef.current);
+        typingStopTimerRef.current = setTimeout(() => {
+          if (isGroup) onTypingGroup(target, false);
+          else onTypingDM(target, false);
+        }, 1500);
       };
 
       const handleFile = async (file) => {
@@ -435,7 +510,7 @@
             <div className="avatar">{isGroup ? '#' : target.slice(0,2).toUpperCase()}</div>
             <div>
               <div className="name">{target}</div>
-              <div className="muted" style={{fontSize:'12px'}}>{isGroup ? 'Group chat' : 'Direct message'}</div>
+              <div className="muted" style={{fontSize:'12px'}}>{typingStatus || (isGroup ? 'Group chat' : 'Direct message')}</div>
             </div>
             <div style={{marginLeft:'auto'}} className="chip glow" title={isGroup ? 'Group chat' : 'Private chat'}>
               {isGroup ? 'Shadow Relay' : 'Stealth Tunnel'}
@@ -449,13 +524,13 @@
               if (msg.kind === 'image') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><img className="media" src={msg.mediaData} alt="image" /></div>;
               if (msg.kind === 'video') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><video className="media" src={msg.mediaData} controls></video></div>;
               if (msg.kind === 'audio') return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}><audio controls src={msg.mediaData}></audio></div>;
-              return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}>{isGroup && !mine ? `${msg.from}: ${msg.text}` : msg.text}</div>;
+              return <div key={key} className={`bubble ${mine ? 'me' : 'them'}`}>{isGroup && !mine ? `${msg.from}: ${msg.text}` : msg.text}<div className="muted" style={{fontSize:'11px', marginTop:'5px', color: mine ? 'rgba(255,255,255,0.85)' : undefined}}>{new Date(msg.createdAt || Date.now()).toLocaleTimeString()}</div></div>;
             })}
           </div>
           <div className="chat-input">
             <button className="attach-btn" title="Attach file" onClick={() => fileInputRef.current?.click()}>📎</button>
-            <input className="input" placeholder={isGroup ? `Message #${target}` : `Message ${target}`} value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
-            <button className="send-btn" onClick={submit}>→</button>
+            <input className="input" placeholder={connected ? (isGroup ? `Message #${target}` : `Message ${target}`) : 'Disconnected. Reconnecting...'} disabled={!connected} value={text} onChange={e => handleTextChange(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
+            <button className="send-btn" onClick={submit} disabled={!connected} style={{opacity: connected ? 1 : 0.45}}>→</button>
             <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" style={{display:'none'}} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value=''; }} />
             <button className="attach-btn" title="Voice note" onClick={recording ? stopRecording : startRecording}>{recording ? '■' : '🎤'}</button>
           </div>
@@ -518,7 +593,7 @@
                 <div className="user-row" key={u.username}>
                   <div>
                     <div style={{fontWeight:700}}>{u.username}</div>
-                    <div className="hash" title={u.password}>Password (stored): {u.password}</div>
+                    <div className="hash">Created: {u.createdAt ? new Date(u.createdAt).toLocaleString() : 'unknown'}</div>
                   </div>
                   {u.username !== 'admin' && <button className="tiny-btn danger" onClick={() => onRemoveUser(u.username)}>Remove</button>}
                 </div>
@@ -559,12 +634,15 @@
       const {
         username,
         isAdmin,
+        connected,
         users,
         messages,
         groups,
         discoverableGroups,
         groupMessages,
         groupMembers,
+        dmTyping,
+        groupTyping,
         adminUsers,
         auditLogs,
         authError,
@@ -573,6 +651,7 @@
         requestPresence,
         requestHistory,
         sendDM,
+        sendDMTyping,
         requestGroups,
         createGroup,
         joinGroup,
@@ -582,6 +661,7 @@
         setGroupRole,
         removeGroupMember,
         sendGroup,
+        sendGroupTyping,
         requestAdminUsers,
         requestAdminAudit,
         addUser,
@@ -656,6 +736,9 @@
       };
 
       const memberInfo = activeChat?.type === 'group' ? groupMembers[activeChat.id] : null;
+      const typingStatus = activeChat?.type === 'group'
+        ? ((groupTyping[activeChat.id] || []).length > 0 ? `${(groupTyping[activeChat.id] || []).slice(0, 2).join(', ')} typing...` : '')
+        : (activeChat?.type === 'dm' && dmTyping[activeChat.id] ? `${activeChat.id} is typing...` : '');
 
       return (
         <>
@@ -668,7 +751,7 @@
                   <div style={{fontWeight:700}}>{username || 'Not signed in'}</div>
                   <div className="muted" style={{fontSize:'12px'}} title="Direct messages and groups">Ninja Relay</div>
                 </div>
-                <div style={{marginLeft:'auto'}} className="chip glow" title="Online and connected">Stealth ON</div>
+                <div style={{marginLeft:'auto'}} className="chip glow" title={connected ? 'Connected to server' : 'Reconnecting to server'}>{connected ? 'Stealth ON' : 'Link Offline'}</div>
               </div>
               <div className="search">
                 <div className="banner">
@@ -697,7 +780,18 @@
               </div>
               <SidebarList users={users} groups={groups} me={username} activeChat={activeChat} onSelectUser={selectUser} onSelectGroup={selectGroup} messages={messages} groupMessages={groupMessages} searchTerm={searchTerm} />
             </div>
-            <ChatWindow me={username} activeChat={activeChat} messages={messages} groupMessages={groupMessages} onSendDM={sendDM} onSendGroup={sendGroup} />
+            <ChatWindow
+              me={username}
+              activeChat={activeChat}
+              messages={messages}
+              groupMessages={groupMessages}
+              typingStatus={typingStatus}
+              connected={connected}
+              onSendDM={sendDM}
+              onSendGroup={sendGroup}
+              onTypingDM={sendDMTyping}
+              onTypingGroup={sendGroupTyping}
+            />
             <AsideRight
               activeChat={activeChat}
               memberInfo={memberInfo}

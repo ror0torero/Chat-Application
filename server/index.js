@@ -6,6 +6,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
+import helmet from 'helmet';
+import compression from 'compression';
+import rateLimit from 'express-rate-limit';
 import { Server as SocketIOServer } from 'socket.io';
 
 dotenv.config();
@@ -18,7 +21,13 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || `http://localhost:${PORT}`;
 const MONGO_URL = process.env.MONGO_URL;
 const DEFAULT_GROUP = 'shadow-relay';
 const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const TRUST_PROXY = String(process.env.TRUST_PROXY || 'false').toLowerCase() === 'true';
+const MESSAGE_MAX_CHARS = Number(process.env.MESSAGE_MAX_CHARS || 2000);
+const LOGIN_WINDOW_MS = Number(process.env.LOGIN_WINDOW_MS || 10 * 60 * 1000);
+const LOGIN_ATTEMPTS = Number(process.env.LOGIN_ATTEMPTS || 8);
+const SEND_WINDOW_MS = Number(process.env.SEND_WINDOW_MS || 10 * 1000);
+const SEND_ATTEMPTS = Number(process.env.SEND_ATTEMPTS || 24);
 
 const normalizeName = name => {
   const cleaned = (name || '').toString().trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
@@ -53,6 +62,33 @@ const verifyPassword = (password, stored) => {
     return false;
   }
 };
+
+const sanitizeText = value => {
+  return String(value || '')
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, MESSAGE_MAX_CHARS);
+};
+
+class SlidingWindowLimiter {
+  constructor() {
+    this.windows = new Map();
+  }
+
+  allow(key, limit, windowMs) {
+    const now = Date.now();
+    const hits = this.windows.get(key) || [];
+    const freshHits = hits.filter(ts => now - ts < windowMs);
+    if (freshHits.length >= limit) {
+      this.windows.set(key, freshHits);
+      return false;
+    }
+    freshHits.push(now);
+    this.windows.set(key, freshHits);
+    return true;
+  }
+}
 
 class ChatStore {
   constructor() {
@@ -171,27 +207,26 @@ class ChatStore {
     if (this.useDb && this.UserModel) {
       await this.UserModel.updateOne(
         { username: ADMIN_USERNAME },
-        { $set: { passwordHash: hashPassword(ADMIN_PASSWORD) } },
+        { $setOnInsert: { passwordHash: hashPassword(ADMIN_PASSWORD) } },
         { upsert: true }
       );
       return;
     }
 
     const existing = this.users.get(ADMIN_USERNAME);
-    if (existing) {
-      existing.passwordHash = hashPassword(ADMIN_PASSWORD);
-      return;
-    }
+    if (existing) return;
 
     this.users.set(ADMIN_USERNAME, {
       id: crypto.randomUUID(),
-      passwordHash: hashPassword(ADMIN_PASSWORD)
+      passwordHash: hashPassword(ADMIN_PASSWORD),
+      createdAt: new Date()
     });
   }
 
   validateMedia({ kind, mediaData }) {
     if (kind === 'text') return { ok: true };
     if (!mediaData) return { ok: false, reason: 'missing media' };
+    if (!String(mediaData).startsWith('data:')) return { ok: false, reason: 'invalid media format' };
     const approxBytes = Buffer.byteLength(mediaData, 'utf8');
     if (approxBytes > this.MAX_MEDIA_BYTES) return { ok: false, reason: 'media too large' };
     return { ok: true };
@@ -216,7 +251,7 @@ class ChatStore {
     if (this.useDb && this.UserModel) {
       const existing = await this.UserModel.findOne({ username }).exec();
       if (!existing) {
-        const created = await this.UserModel.create({ username, passwordHash: hashPassword(password) });
+        const created = await this.UserModel.create({ username, passwordHash: hashPassword(password), createdAt: new Date() });
         return { ok: true, userId: String(created._id), username, created: true, isAdmin: false };
       }
       if (!verifyPassword(password, existing.passwordHash)) {
@@ -228,7 +263,7 @@ class ChatStore {
     const existing = this.users.get(username);
     if (!existing) {
       const id = crypto.randomUUID();
-      this.users.set(username, { id, passwordHash: hashPassword(password) });
+      this.users.set(username, { id, passwordHash: hashPassword(password), createdAt: new Date() });
       return { ok: true, userId: id, username, created: true, isAdmin: false };
     }
     if (!verifyPassword(password, existing.passwordHash)) {
@@ -240,11 +275,11 @@ class ChatStore {
   async listUsers() {
     if (this.useDb && this.UserModel) {
       const users = await this.UserModel.find({}).sort({ username: 1 }).lean().exec();
-      return users.map(u => ({ username: u.username, password: u.passwordHash }));
+      return users.map(u => ({ username: u.username, createdAt: u.createdAt }));
     }
 
     return Array.from(this.users.entries())
-      .map(([username, value]) => ({ username, password: value.passwordHash }))
+      .map(([username, value]) => ({ username, createdAt: value.createdAt || null }))
       .sort((a, b) => a.username.localeCompare(b.username));
   }
 
@@ -260,7 +295,7 @@ class ChatStore {
     if (this.useDb && this.UserModel) {
       await this.UserModel.updateOne(
         { username: normalized },
-        { $set: { passwordHash: hashPassword(password) } },
+        { $set: { passwordHash: hashPassword(password), createdAt: new Date() } },
         { upsert: true }
       );
       return { ok: true };
@@ -272,7 +307,7 @@ class ChatStore {
       return { ok: true };
     }
 
-    this.users.set(normalized, { id: crypto.randomUUID(), passwordHash: hashPassword(password) });
+    this.users.set(normalized, { id: crypto.randomUUID(), passwordHash: hashPassword(password), createdAt: new Date() });
     return { ok: true };
   }
 
@@ -602,10 +637,43 @@ class ChatStore {
 
 const store = new ChatStore();
 await store.init(MONGO_URL);
+const loginRateLimiter = new SlidingWindowLimiter();
+const sendRateLimiter = new SlidingWindowLimiter();
 
 const app = express();
+if (TRUST_PROXY) app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+  res.setHeader('X-Request-Id', crypto.randomUUID());
+  next();
+});
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      connectSrc: ["'self'", CLIENT_ORIGIN],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      mediaSrc: ["'self'", 'data:', 'blob:']
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
+app.use(compression());
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 180,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 app.use(cors({ origin: CLIENT_ORIGIN, methods: ['GET', 'POST'], credentials: false }));
 app.use(express.json());
+app.use('/api', apiLimiter);
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (_req, res) => {
@@ -614,7 +682,13 @@ app.get('/api/health', (_req, res) => {
     storage: store.useDb ? 'mongodb' : 'memory',
     auth: 'username_password',
     defaultGroup: DEFAULT_GROUP,
-    adminUser: ADMIN_USERNAME
+    adminUser: ADMIN_USERNAME,
+    security: {
+      helmet: true,
+      compression: true,
+      requestRateLimit: true,
+      messageRateLimit: true
+    }
   });
 });
 
@@ -648,11 +722,17 @@ io.on('connection', socket => {
   let username = null;
   let userId = null;
   let isAdmin = false;
+  const clientIp = String(socket.handshake.address || 'unknown');
 
   socket.on('auth:login', async payload => {
     try {
       const normalized = normalizeName(payload?.username);
       const password = (payload?.password || '').toString();
+      const loginKey = `${clientIp}:${normalized || 'unknown'}`;
+      if (!loginRateLimiter.allow(loginKey, LOGIN_ATTEMPTS, LOGIN_WINDOW_MS)) {
+        socket.emit('auth:error', { message: 'Too many login attempts. Try again later.' });
+        return;
+      }
       if (!normalized) {
         socket.emit('auth:error', { message: 'Invalid username. Use letters, numbers, _ or -.' });
         return;
@@ -854,14 +934,20 @@ io.on('connection', socket => {
 
   socket.on('dm:send', async payload => {
     if (!username) return;
+    if (!sendRateLimiter.allow(`dm:${username}`, SEND_ATTEMPTS, SEND_WINDOW_MS)) {
+      socket.emit('app:error', { message: 'Rate limit reached. Slow down.' });
+      return;
+    }
 
     const to = normalizeName(payload?.to);
     const kind = (payload?.kind || 'text').toString();
-    const text = (payload?.text || '').toString().trim().slice(0, 2000);
+    const text = sanitizeText(payload?.text);
     const mediaType = payload?.mediaType ? String(payload.mediaType) : null;
     const mediaData = payload?.mediaData ? String(payload.mediaData) : null;
+    const allowedKinds = new Set(['text', 'image', 'video', 'audio']);
 
     if (!to) return;
+    if (!allowedKinds.has(kind)) return;
     if (kind === 'text' && !text) return;
     if (kind !== 'text') {
       const ok = store.validateMedia({ kind, mediaData });
@@ -874,14 +960,20 @@ io.on('connection', socket => {
 
   socket.on('group:send', async payload => {
     if (!username) return;
+    if (!sendRateLimiter.allow(`group:${username}`, SEND_ATTEMPTS, SEND_WINDOW_MS)) {
+      socket.emit('app:error', { message: 'Rate limit reached. Slow down.' });
+      return;
+    }
 
     const group = normalizeGroup(payload?.group);
     const kind = (payload?.kind || 'text').toString();
-    const text = (payload?.text || '').toString().trim().slice(0, 2000);
+    const text = sanitizeText(payload?.text);
     const mediaType = payload?.mediaType ? String(payload.mediaType) : null;
     const mediaData = payload?.mediaData ? String(payload.mediaData) : null;
+    const allowedKinds = new Set(['text', 'image', 'video', 'audio']);
 
     if (!group) return;
+    if (!allowedKinds.has(kind)) return;
     if (kind === 'text' && !text) return;
     if (kind !== 'text') {
       const ok = store.validateMedia({ kind, mediaData });
@@ -896,6 +988,26 @@ io.on('connection', socket => {
 
     const saved = await store.addGroupMessage({ group, from: username, text, kind, mediaType, mediaData });
     io.to(`group:${group}`).emit('group:message', saved);
+  });
+
+  socket.on('dm:typing', ({ to, isTyping }) => {
+    if (!username) return;
+    const target = normalizeName(to);
+    if (!target) return;
+    io.to(`user:${target}`).emit('dm:typing', { from: username, to: target, isTyping: !!isTyping });
+  });
+
+  socket.on('group:typing', async ({ group, isTyping }) => {
+    if (!username) return;
+    const normalized = normalizeGroup(group);
+    if (!normalized) return;
+    const role = await store.getGroupRole(normalized, username);
+    if (role === 'none') return;
+    socket.to(`group:${normalized}`).emit('group:typing', {
+      group: normalized,
+      from: username,
+      isTyping: !!isTyping
+    });
   });
 
   socket.on('admin:users:list', async () => {
